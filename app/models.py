@@ -12,5 +12,6 @@ class UserInteraction(BaseModel):
 class Posts(BaseModel):
     user_id: int
     post_id: int
-    post_tags: List[str]
+    metadata: List[str]
+    location: str
     likes: int
