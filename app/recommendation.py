@@ -4,6 +4,8 @@ from surprise import Dataset, Reader, SVD
 from surprise.model_selection import train_test_split
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
+from collections import defaultdict
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Example Data
 ratings_dict = {
@@ -49,36 +51,58 @@ def content_based_recommendations(title, cosine_sim=cosine_sim):
     item_indices = [i[0] for i in sim_scores]
     return items_df['title'].iloc[item_indices]
 
-# General Recommendation Function for Any User
-def recommend_posts(user_id, alpha=0.7):
-    user_rated_items = ratings_df[ratings_df["user_id"] == user_id]["post_id"]
-
+def recommend_posts(user_id, alpha=0.7, top_n=5):
+    user_rated_items = ratings_df[ratings_df["user_id"] == user_id]["post_id"].tolist()
+    
     # Content-Based Scores
-    content_scores = {item: content_based_recommendations(items_df[items_df["post_id"] == item]["title"].values[0]) for item in user_rated_items}
+    content_scores = defaultdict(float)
+    for item in user_rated_items:
+        recommendations = content_based_recommendations(items_df[items_df["post_id"] == item]["title"].values[0])
+        for rec in recommendations:
+            content_scores[items_df[items_df["title"] == rec]["post_id"].values[0]] += 1
+    
+    # Normalize content scores
+    max_content_score = max(content_scores.values()) if content_scores else 1
+    content_scores = {k: v / max_content_score for k, v in content_scores.items()}
 
     # Collaborative Filtering Prediction for All Items
     collab_scores = {}
-    for item in items_df["post_id"]: 
+    for item in items_df["post_id"]:
         collab_scores[item] = algo.predict(user_id, item).est
 
     # Combine Scores with a Weighted Average
     combined_scores = {}
     for item in items_df["post_id"]:
-        content_score = 0
-        for recommended_items in content_scores.values():
-            if items_df[items_df["title"].isin(recommended_items)]["post_id"].values[0] == item:
-                content_score = 1  # Simple binary match, can be replaced with more sophisticated logic
-        combined_scores[item] = alpha * collab_scores[item] + (1 - alpha) * content_score
+        combined_scores[item] = alpha * collab_scores[item] + (1 - alpha) * content_scores.get(item, 0)
 
-    # Normalize Scores for Final Recommendations
-    scaler = MinMaxScaler()
-    normalized_scores = scaler.fit_transform([[score] for score in combined_scores.values()])
-    final_recommendations = sorted(zip(combined_scores.keys(), normalized_scores), key=lambda x: x[1], reverse=True)
+    # Add popularity factor
+    popularity = items_df.set_index('post_id')['likes'].to_dict()
+    max_likes = max(popularity.values())
+    for item in combined_scores:
+        combined_scores[item] += 0.1 * (popularity[item] / max_likes)  # Small boost based on popularity
 
-    # Display the Top Recommendations
-    print(f"Top Recommendations for User {user_id}:")
+    # Sort and return top N recommendations
+    final_recommendations = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:top_n]
+
+    print(f"Top {top_n} Recommendations for User {user_id}:")
     for item_id, score in final_recommendations:
-        print(f"{posts_dict['title'][item_id - 1]} - Score: {score[0]:.2f}")
+        print(f"{items_df[items_df['post_id'] == item_id]['title'].values[0]} - Score: {score:.2f}")
 
-# Example Usage for a specific user
-recommend_posts("E")
+    return final_recommendations
+
+# Example Usage
+recommend_posts("E", top_n=3)
+
+# Add function to handle cold start for new users
+def recommend_for_new_user(top_n=5):
+    # Use popularity and diversity for new users
+    popular_items = items_df.sort_values('likes', ascending=False)['post_id'].tolist()[:top_n]
+    
+    print(f"Top {top_n} Recommendations for New User:")
+    for item_id in popular_items:
+        print(f"{items_df[items_df['post_id'] == item_id]['title'].values[0]}")
+
+    return popular_items
+
+# Example Usage for new user
+recommend_for_new_user(top_n=3)
