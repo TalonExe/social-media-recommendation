@@ -9,10 +9,10 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
-    birth_date = Column(Date, nullable=False)
+    birthDate = Column(Date, nullable=False)
     gender = Column(String, nullable=False)
     country = Column(String, nullable=False)
-    phone_number = Column(String, unique=True, nullable=False)
+    phoneNumber = Column(String, unique=True, nullable=False)
 
     # Relationships
     posts = relationship("Post", back_populates="user")

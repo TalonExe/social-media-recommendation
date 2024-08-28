@@ -28,7 +28,7 @@ def fetch_data_from_db(db: Session):
     
     return ratings, posts, post_tags
 
-def recommend_posts(user_id: int, db: Session, alpha=0.7, top_n=5):
+def recommend_posts(user_id: int, db: Session, alpha=0.7):
     ratings, posts, post_tags = fetch_data_from_db(db)
     
     # Create DataFrames
@@ -59,7 +59,7 @@ def recommend_posts(user_id: int, db: Session, alpha=0.7, top_n=5):
         idx = posts_df.index[posts_df['title'] == title][0]
         sim_scores = list(enumerate(cosine_sim[idx]))
         sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-        sim_scores = sim_scores[1:4]
+        sim_scores = sim_scores[1:]
         item_indices = [i[0] for i in sim_scores]
         return posts_df['title'].iloc[item_indices]
     
@@ -90,11 +90,11 @@ def recommend_posts(user_id: int, db: Session, alpha=0.7, top_n=5):
     for item in combined_scores:
         combined_scores[item] += 0.1 * (popularity[item] / max_likes)  # Small boost based on popularity
 
-    # Sort and return top N recommendations
-    final_recommendations = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    # Sort recommendations
+    final_recommendations = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)
     return final_recommendations
 
-def recommend_for_new_user(db: Session, top_n=5):
+def recommend_for_new_user(db: Session):
     posts = db.query(Post).all()
-    popular_items = sorted(posts, key=lambda p: p.postLikes, reverse=True)[:top_n]
+    popular_items = sorted(posts, key=lambda p: p.postLikes, reverse=True)
     return [(p.id, 1.0) for p in popular_items]
